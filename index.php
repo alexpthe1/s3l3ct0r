@@ -1,8 +1,9 @@
 <?php
 session_start();
 
-// Ensure UTF-8 output
-header('Content-Type: text/html; charset=utf-8');
+// Force UTF-8 for everything
+header('Content-Type: text/html; charset=UTF-8');
+mb_internal_encoding('UTF-8');
 
 define('DATA_DIR', __DIR__ . '/data/');
 
@@ -27,7 +28,7 @@ function loadSession($id) {
  */
 function saveSession($data) {
     $path = DATA_DIR . $data['id'] . '.json';
-    file_put_contents($path, json_encode($data, JSON_PRETTY_PRINT));
+    file_put_contents($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
 /**
@@ -81,17 +82,20 @@ if ($sessionId) {
     if (!$currentSession) {
         $error = "Session nicht gefunden.";
     } else {
-        // Check Auth
-        if (empty($currentSession['password_hash'])) {
-            // If no password, everyone is admin EXCEPT for poll method where we distinguish
+        // Check if user is authenticated for THIS specific session
+        if (isset($_SESSION['auth_' . $sessionId])) {
+            $isAuthenticated = true;
+        } 
+        // If NO password is set, the creator (and anyone else) is admin for non-poll sessions
+        // OR if they specifically requested admin access for a poll with no password.
+        elseif (empty($currentSession['password_hash'])) {
             if ($currentSession['method'] !== 'poll' || isset($_GET['admin'])) {
                 $isAuthenticated = true;
+                $_SESSION['auth_' . $sessionId] = true;
             }
-        } elseif (isset($_SESSION['auth_' . $sessionId])) {
-            $isAuthenticated = true;
         }
 
-        // Handle Login
+        // Handle Login Action
         if (!$isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'login') {
             if (password_verify($_POST['password'], $currentSession['password_hash'])) {
                 $_SESSION['auth_' . $sessionId] = true;
@@ -122,7 +126,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'create') {
         'votes' => []
     ];
     saveSession($newSession);
-    header("Location: ?id=" . $id . ($newSession['password_hash'] ? '' : '&admin=1'));
+    
+    // Auth the creator immediately
+    $_SESSION['auth_' . $id] = true;
+    
+    // Redirect to dashboard (with admin=1 to ensure we see the dashboard)
+    header("Location: ?id=" . $id . "&admin=1");
     exit;
 }
 
@@ -136,7 +145,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'add_opt
         'votes' => 0
     ];
     saveSession($currentSession);
-    header("Location: ?id=" . $sessionId . (isset($_GET['admin']) ? '&admin=1' : ''));
+    header("Location: ?id=" . $sessionId . "&admin=1");
     exit;
 }
 
@@ -144,7 +153,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'add_opt
 if ($isAuthenticated && isset($_GET['remove']) && isset($currentSession['options'][$_GET['remove']])) {
     array_splice($currentSession['options'], $_GET['remove'], 1);
     saveSession($currentSession);
-    header("Location: ?id=" . $sessionId . (isset($_GET['admin']) ? '&admin=1' : ''));
+    header("Location: ?id=" . $sessionId . "&admin=1");
     exit;
 }
 
@@ -158,7 +167,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'update_
         }
         saveSession($currentSession);
     }
-    header("Location: ?id=" . $sessionId . (isset($_GET['admin']) ? '&admin=1' : ''));
+    header("Location: ?id=" . $sessionId . "&admin=1");
     exit;
 }
 
@@ -167,7 +176,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'vote' && $sessionId && $cur
     $voterName = htmlspecialchars(trim($_POST['voter_name']));
     $selectedOptions = isset($_POST['vote_options']) ? (array)$_POST['vote_options'] : [];
     
-    // Check if already voted via session or cookie
     $votedCookie = 'voted_' . $sessionId;
     $alreadyVoted = isset($_SESSION[$votedCookie]) || isset($_COOKIE[$votedCookie]);
 
@@ -194,7 +202,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'vote' && $sessionId && $cur
         saveSession($currentSession);
         
         $_SESSION[$votedCookie] = true;
-        setcookie($votedCookie, '1', time() + (86400 * 30), "/"); // 30 days
+        setcookie($votedCookie, '1', time() + (86400 * 30), "/"); 
         
         header("Location: ?id=" . $sessionId . "&voted=1");
         exit;
@@ -210,10 +218,18 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
 // Determination of View Mode
 $viewMode = 'dashboard';
 if ($sessionId && $currentSession) {
-    if ($currentSession['method'] === 'poll' && !$isAuthenticated) {
-        $viewMode = 'poll_vote';
-    } elseif (!$isAuthenticated) {
-        $viewMode = 'login';
+    // If admin parameter is set, we want dashboard/login
+    if (isset($_GET['admin'])) {
+        $viewMode = $isAuthenticated ? 'dashboard' : 'login';
+    } else {
+        // If no admin parameter:
+        // Polls go to public voting
+        if ($currentSession['method'] === 'poll') {
+            $viewMode = 'poll_vote';
+        } else {
+            // Other methods go to dashboard (if no password) or login
+            $viewMode = $isAuthenticated ? 'dashboard' : 'login';
+        }
     }
 } else {
     $viewMode = 'landing';
@@ -224,6 +240,7 @@ if ($sessionId && $currentSession) {
 <html lang="de">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>s3l3ct0r</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -274,7 +291,7 @@ if ($sessionId && $currentSession) {
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 ml-1">Methode</label>
-                        <select name="method" onchange="togglePollSettings(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none transition-all cursor-pointer">
+                        <select name="method" onchange="togglePollSettings(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none transition-all cursor-pointer text-white">
                             <option value="random">Zufall</option>
                             <option value="even">Gleichmäßige Verteilung</option>
                             <option value="weighted">Gewichtungbasiert</option>
@@ -507,7 +524,7 @@ if ($sessionId && $currentSession) {
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                         </button>
-                                        <a href="?id=<?= $sessionId ?>&remove=<?= $idx ?><?= isset($_GET['admin']) ? '&admin=1' : '' ?>" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all" onclick="return confirm('Option löschen?')">
+                                        <a href="?id=<?= $sessionId ?>&remove=<?= $idx ?>&admin=1" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all" onclick="return confirm('Option löschen?')">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
@@ -559,7 +576,7 @@ if ($sessionId && $currentSession) {
                 </section>
                 
                 <div class="mt-8 pt-4 border-t border-slate-700/50 text-center">
-                    <a href="?id=<?= $sessionId ?>" class="text-[10px] text-slate-500 hover:text-cyan-400 uppercase tracking-widest font-bold transition-colors">Zur Voting-Ansicht</a>
+                    <a href="?id=<?= $sessionId ?>" class="text-[10px] text-slate-500 hover:text-cyan-400 uppercase tracking-widest font-bold transition-colors">Zur Voting-Ansicht (für Teilnehmer)</a>
                 </div>
             </main>
         <?php endif; ?>
