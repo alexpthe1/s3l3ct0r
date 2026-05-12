@@ -11,8 +11,9 @@
   - **Zufall:** Jede Option hat die gleiche Chance.
   - **Gleichmäßige Verteilung:** Berücksichtigt die bisherige Historie (Optionen, die seltener gewählt wurden, kommen eher dran).
   - **Gewichtung:** Du kannst bestimmen, wie wahrscheinlich eine Option gewählt wird (z.B. Option A doppelt so oft wie Option B).
+  - **Umfrage:** Erstelle ein Voting, bei dem Nutzer ihren Namen angeben und für Optionen abstimmen können. Inklusive Live-Ergebnissen und einstellbarer Mehrfachauswahl.
 - **Session-basiert:** Jede Auswahlrunde hat eine eigene URL, die geteilt werden kann.
-- **Passwortschutz:** Schütze deine Sessions vor unbefugtem Zugriff.
+- **Passwortschutz:** Schütze den Admin-Bereich deiner Sessions vor unbefugtem Zugriff.
 - **Modernes Design:** Responsive UI mit Tailwind CSS und Space Grotesk Typografie.
 - **Dateibasiert:** Keine Datenbank erforderlich (speichert Daten als JSON).
 

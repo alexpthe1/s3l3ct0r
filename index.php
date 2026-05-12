@@ -1,6 +1,9 @@
 <?php
 session_start();
 
+// Ensure UTF-8 output
+header('Content-Type: text/html; charset=utf-8');
+
 define('DATA_DIR', __DIR__ . '/data/');
 
 /**
@@ -80,7 +83,10 @@ if ($sessionId) {
     } else {
         // Check Auth
         if (empty($currentSession['password_hash'])) {
-            $isAuthenticated = true;
+            // If no password, everyone is admin EXCEPT for poll method where we distinguish
+            if ($currentSession['method'] !== 'poll' || isset($_GET['admin'])) {
+                $isAuthenticated = true;
+            }
         } elseif (isset($_SESSION['auth_' . $sessionId])) {
             $isAuthenticated = true;
         }
@@ -113,10 +119,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'create') {
         'settings' => [
             'poll_allow_multiple' => isset($_POST['poll_allow_multiple']) ? (bool)$_POST['poll_allow_multiple'] : false
         ],
-        'votes' => [] // For poll method: [{name, options: [idx], ip, time}]
+        'votes' => []
     ];
     saveSession($newSession);
-    header("Location: ?id=" . $id);
+    header("Location: ?id=" . $id . ($newSession['password_hash'] ? '' : '&admin=1'));
     exit;
 }
 
@@ -127,10 +133,10 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'add_opt
         'text' => htmlspecialchars($_POST['option_text']), 
         'hits' => 0,
         'weight' => $weight,
-        'votes' => 0 // Counter for fast display
+        'votes' => 0
     ];
     saveSession($currentSession);
-    header("Location: ?id=" . $sessionId);
+    header("Location: ?id=" . $sessionId . (isset($_GET['admin']) ? '&admin=1' : ''));
     exit;
 }
 
@@ -138,7 +144,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'add_opt
 if ($isAuthenticated && isset($_GET['remove']) && isset($currentSession['options'][$_GET['remove']])) {
     array_splice($currentSession['options'], $_GET['remove'], 1);
     saveSession($currentSession);
-    header("Location: ?id=" . $sessionId);
+    header("Location: ?id=" . $sessionId . (isset($_GET['admin']) ? '&admin=1' : ''));
     exit;
 }
 
@@ -152,7 +158,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'update_
         }
         saveSession($currentSession);
     }
-    header("Location: ?id=" . $sessionId);
+    header("Location: ?id=" . $sessionId . (isset($_GET['admin']) ? '&admin=1' : ''));
     exit;
 }
 
@@ -161,15 +167,9 @@ if (isset($_POST['action']) && $_POST['action'] === 'vote' && $sessionId && $cur
     $voterName = htmlspecialchars(trim($_POST['voter_name']));
     $selectedOptions = isset($_POST['vote_options']) ? (array)$_POST['vote_options'] : [];
     
-    // Validate
-    $ip = $_SERVER['REMOTE_ADDR'];
-    $alreadyVoted = false;
-    foreach ($currentSession['votes'] as $v) {
-        if ($v['ip'] === $ip) {
-            $alreadyVoted = true;
-            break;
-        }
-    }
+    // Check if already voted via session or cookie
+    $votedCookie = 'voted_' . $sessionId;
+    $alreadyVoted = isset($_SESSION[$votedCookie]) || isset($_COOKIE[$votedCookie]);
 
     if (empty($voterName)) {
         $error = "Bitte gib deinen Namen ein.";
@@ -183,7 +183,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'vote' && $sessionId && $cur
         $voteData = [
             'name' => $voterName,
             'options' => array_map('intval', $selectedOptions),
-            'ip' => $ip,
             'time' => time()
         ];
         $currentSession['votes'][] = $voteData;
@@ -193,7 +192,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'vote' && $sessionId && $cur
             }
         }
         saveSession($currentSession);
-        $_SESSION['voted_' . $sessionId] = true;
+        
+        $_SESSION[$votedCookie] = true;
+        setcookie($votedCookie, '1', time() + (86400 * 30), "/"); // 30 days
+        
         header("Location: ?id=" . $sessionId . "&voted=1");
         exit;
     }
@@ -206,9 +208,9 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
 }
 
 // Determination of View Mode
-$viewMode = 'dashboard'; // Default authenticated view
+$viewMode = 'dashboard';
 if ($sessionId && $currentSession) {
-    if (!$isAuthenticated && $currentSession['method'] === 'poll') {
+    if ($currentSession['method'] === 'poll' && !$isAuthenticated) {
         $viewMode = 'poll_vote';
     } elseif (!$isAuthenticated) {
         $viewMode = 'login';
@@ -289,7 +291,7 @@ if ($sessionId && $currentSession) {
                         </label>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 ml-1">Passwort (optional)</label>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 ml-1">Admin-Passwort (optional)</label>
                         <input type="password" name="password" placeholder="••••••••" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all">
                     </div>
                     <button type="submit" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-all transform active:scale-[0.98] shadow-lg shadow-cyan-900/20 mt-2">
@@ -312,14 +314,14 @@ if ($sessionId && $currentSession) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold">Geschützte Session</h2>
-                    <p class="text-slate-400 text-sm mt-1">Bitte gib das Passwort ein.</p>
+                    <h2 class="text-xl font-bold">Admin-Bereich</h2>
+                    <p class="text-slate-400 text-sm mt-1">Bitte gib das Admin-Passwort ein.</p>
                 </div>
                 <form method="POST" class="space-y-4">
                     <input type="hidden" name="action" value="login">
                     <input type="password" name="password" autofocus placeholder="Passwort" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-center text-xl tracking-widest">
                     <button type="submit" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold py-4 rounded-xl transition-all transform active:scale-[0.98]">
-                        Freischalten
+                        Einloggen
                     </button>
                     <a href="index.php" class="block text-center text-xs text-slate-500 hover:text-slate-300 transition-colors pt-2">Abbrechen</a>
                 </form>
@@ -333,7 +335,10 @@ if ($sessionId && $currentSession) {
                     <p class="text-slate-400 text-sm mt-1">Nimm an der Umfrage teil.</p>
                 </div>
 
-                <?php if (isset($_GET['voted']) || isset($_SESSION['voted_' . $sessionId])): ?>
+                <?php 
+                $votedCookie = 'voted_' . $sessionId;
+                if (isset($_GET['voted']) || isset($_SESSION[$votedCookie]) || isset($_COOKIE[$votedCookie])): 
+                ?>
                     <div class="bg-cyan-500/20 border border-cyan-500/50 text-cyan-200 p-4 rounded-xl mb-6 text-center">
                         <p class="font-bold">Vielen Dank!</p>
                         <p class="text-xs">Deine Stimme wurde gezählt.</p>
@@ -342,10 +347,14 @@ if ($sessionId && $currentSession) {
                     <div class="space-y-4">
                         <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Aktuelles Ergebnis</h3>
                         <?php 
-                        $maxVotes = count($currentSession['votes']) > 0 ? max(array_column($currentSession['options'], 'votes')) : 1;
-                        if ($maxVotes == 0) $maxVotes = 1;
+                        $maxVotesForScale = 0;
+                        if (!empty($currentSession['options'])) {
+                            $maxVotesForScale = max(array_column($currentSession['options'], 'votes'));
+                        }
+                        if ($maxVotesForScale == 0) $maxVotesForScale = 1;
+                        
                         foreach ($currentSession['options'] as $opt): 
-                            $percent = round(($opt['votes'] ?? 0) / $maxVotes * 100);
+                            $percent = round(($opt['votes'] ?? 0) / $maxVotesForScale * 100);
                         ?>
                             <div class="space-y-1">
                                 <div class="flex justify-between text-sm">
@@ -384,6 +393,10 @@ if ($sessionId && $currentSession) {
                         </button>
                     </form>
                 <?php endif; ?>
+                
+                <div class="mt-8 pt-4 border-t border-slate-700/50 text-center">
+                    <a href="?id=<?= $sessionId ?>&admin=1" class="text-[10px] text-slate-500 hover:text-cyan-400 uppercase tracking-widest font-bold transition-colors">Admin-Login</a>
+                </div>
             </section>
 
         <?php elseif ($viewMode === 'dashboard'): ?>
@@ -418,17 +431,20 @@ if ($sessionId && $currentSession) {
                         <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Aktuelle Auswertung</h3>
                         <div class="space-y-4">
                             <?php 
-                            $totalVoters = count($currentSession['votes']);
-                            $maxVotes = $totalVoters > 0 ? max(array_column($currentSession['options'], 'votes')) : 0;
-                            if ($maxVotes == 0) $maxVotes = 1;
+                            $totalVotersCount = count($currentSession['votes']);
+                            $maxVotesCount = 0;
+                            if (!empty($currentSession['options'])) {
+                                $maxVotesCount = max(array_column($currentSession['options'], 'votes'));
+                            }
+                            if ($maxVotesCount == 0) $maxVotesCount = 1;
 
                             foreach ($currentSession['options'] as $opt): 
-                                $percent = round(($opt['votes'] ?? 0) / $maxVotes * 100);
+                                $percent = round(($opt['votes'] ?? 0) / $maxVotesCount * 100);
                             ?>
                                 <div class="space-y-1">
                                     <div class="flex justify-between text-sm">
                                         <span class="font-bold"><?= htmlspecialchars($opt['text']) ?></span>
-                                        <span class="text-cyan-400 font-bold"><?= $opt['votes'] ?? 0 ?> (<?= $totalVoters > 0 ? round(($opt['votes'] ?? 0) / $totalVoters * 100) : 0 ?>%)</span>
+                                        <span class="text-cyan-400 font-bold"><?= $opt['votes'] ?? 0 ?> (<?= $totalVotersCount > 0 ? round(($opt['votes'] ?? 0) / $totalVotersCount * 100) : 0 ?>%)</span>
                                     </div>
                                     <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700">
                                         <div class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all" style="width: <?= $percent ?>%"></div>
@@ -437,7 +453,7 @@ if ($sessionId && $currentSession) {
                             <?php endforeach; ?>
                         </div>
                         <div class="pt-4 border-t border-slate-700/50 mt-4">
-                            <p class="text-xs text-slate-500 italic">Gesamtteilnehmer: <?= $totalVoters ?></p>
+                            <p class="text-xs text-slate-500 italic">Gesamtteilnehmer: <?= $totalVotersCount ?></p>
                         </div>
                     </section>
                 <?php endif; ?>
@@ -491,7 +507,7 @@ if ($sessionId && $currentSession) {
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                         </button>
-                                        <a href="?id=<?= $sessionId ?>&remove=<?= $idx ?>" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all" onclick="return confirm('Option löschen?')">
+                                        <a href="?id=<?= $sessionId ?>&remove=<?= $idx ?><?= isset($_GET['admin']) ? '&admin=1' : '' ?>" class="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all" onclick="return confirm('Option löschen?')">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
@@ -541,6 +557,10 @@ if ($sessionId && $currentSession) {
                         </button>
                     </form>
                 </section>
+                
+                <div class="mt-8 pt-4 border-t border-slate-700/50 text-center">
+                    <a href="?id=<?= $sessionId ?>" class="text-[10px] text-slate-500 hover:text-cyan-400 uppercase tracking-widest font-bold transition-colors">Zur Voting-Ansicht</a>
+                </div>
             </main>
         <?php endif; ?>
 
@@ -558,7 +578,10 @@ if ($sessionId && $currentSession) {
 
     <script>
         function copyLink() {
-            navigator.clipboard.writeText(window.location.href);
+            // Copy voting link by default
+            const url = new URL(window.location.href);
+            url.searchParams.delete('admin');
+            navigator.clipboard.writeText(url.toString());
             const btn = event.currentTarget;
             const originalIcon = btn.innerHTML;
             btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
