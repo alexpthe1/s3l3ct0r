@@ -376,10 +376,10 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
             <div class="flex justify-center gap-4 text-xs">
                 <a href="index.php" class="text-slate-500 hover:text-cyan-400 transition-colors">Startseite</a>
                 <span class="text-slate-700">&bull;</span>
-                <a href="https://github.com" target="_blank" class="text-slate-500 hover:text-cyan-400 transition-colors">GitHub</a>
+                <a href="https://github.com/alexpthe1/s3l3ct0r" target="_blank" class="text-slate-500 hover:text-cyan-400 transition-colors">GitHub</a>
             </div>
             <p class="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
-                &copy; <?= date('Y') ?> s3l3ct0r &bull; Built with passion
+                &copy; <?= date('Y') ?> s3l3ct0r &bull; Alexander Peter
             </p>
         </footer>
     </div>
