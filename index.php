@@ -101,7 +101,7 @@ if ($sessionId) {
 if (isset($_POST['action']) && $_POST['action'] === 'create') {
     $id = generateId();
     $method = $_POST['method'] ?: 'random';
-    if (!in_array($method, ['random', 'even', 'weighted'])) $method = 'random';
+    if (!in_array($method, ['random', 'even', 'weighted', 'poll'])) $method = 'random';
     
     $newSession = [
         'id' => $id,
@@ -109,7 +109,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'create') {
         'method' => $method,
         'password_hash' => $_POST['password'] ? password_hash($_POST['password'], PASSWORD_DEFAULT) : '',
         'options' => [],
-        'created_at' => time()
+        'created_at' => time(),
+        'settings' => [
+            'poll_allow_multiple' => isset($_POST['poll_allow_multiple']) ? (bool)$_POST['poll_allow_multiple'] : false
+        ],
+        'votes' => [] // For poll method: [{name, options: [idx], ip, time}]
     ];
     saveSession($newSession);
     header("Location: ?id=" . $id);
@@ -122,7 +126,8 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'add_opt
     $currentSession['options'][] = [
         'text' => htmlspecialchars($_POST['option_text']), 
         'hits' => 0,
-        'weight' => $weight
+        'weight' => $weight,
+        'votes' => 0 // Counter for fast display
     ];
     saveSession($currentSession);
     header("Location: ?id=" . $sessionId);
@@ -151,10 +156,65 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'update_
     exit;
 }
 
+// Vote in Poll
+if (isset($_POST['action']) && $_POST['action'] === 'vote' && $sessionId && $currentSession['method'] === 'poll') {
+    $voterName = htmlspecialchars(trim($_POST['voter_name']));
+    $selectedOptions = isset($_POST['vote_options']) ? (array)$_POST['vote_options'] : [];
+    
+    // Validate
+    $ip = $_SERVER['REMOTE_ADDR'];
+    $alreadyVoted = false;
+    foreach ($currentSession['votes'] as $v) {
+        if ($v['ip'] === $ip) {
+            $alreadyVoted = true;
+            break;
+        }
+    }
+
+    if (empty($voterName)) {
+        $error = "Bitte gib deinen Namen ein.";
+    } elseif (empty($selectedOptions)) {
+        $error = "Bitte wähle mindestens eine Option.";
+    } elseif (!$currentSession['settings']['poll_allow_multiple'] && count($selectedOptions) > 1) {
+        $error = "Nur eine Option erlaubt.";
+    } elseif ($alreadyVoted) {
+        $error = "Du hast bereits abgestimmt.";
+    } else {
+        $voteData = [
+            'name' => $voterName,
+            'options' => array_map('intval', $selectedOptions),
+            'ip' => $ip,
+            'time' => time()
+        ];
+        $currentSession['votes'][] = $voteData;
+        foreach ($voteData['options'] as $idx) {
+            if (isset($currentSession['options'][$idx])) {
+                $currentSession['options'][$idx]['votes'] = ($currentSession['options'][$idx]['votes'] ?? 0) + 1;
+            }
+        }
+        saveSession($currentSession);
+        $_SESSION['voted_' . $sessionId] = true;
+        header("Location: ?id=" . $sessionId . "&voted=1");
+        exit;
+    }
+}
+
 // Perform Selection
 $selectionResult = '';
 if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select') {
     $selectionResult = performSelection($currentSession);
+}
+
+// Determination of View Mode
+$viewMode = 'dashboard'; // Default authenticated view
+if ($sessionId && $currentSession) {
+    if (!$isAuthenticated && $currentSession['method'] === 'poll') {
+        $viewMode = 'poll_vote';
+    } elseif (!$isAuthenticated) {
+        $viewMode = 'login';
+    }
+} else {
+    $viewMode = 'landing';
 }
 
 ?>
@@ -195,7 +255,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
             </div>
         <?php endif; ?>
 
-        <?php if (!$sessionId): ?>
+        <?php if ($viewMode === 'landing'): ?>
             <!-- Landing / Create -->
             <section class="bg-slate-800/50 backdrop-blur-md p-6 rounded-2xl border border-slate-700 shadow-xl">
                 <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
@@ -212,11 +272,21 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 ml-1">Methode</label>
-                        <select name="method" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none transition-all cursor-pointer">
+                        <select name="method" onchange="togglePollSettings(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 appearance-none transition-all cursor-pointer">
                             <option value="random">Zufall</option>
                             <option value="even">Gleichmäßige Verteilung</option>
                             <option value="weighted">Gewichtungbasiert</option>
+                            <option value="poll">Umfrage (Votings)</option>
                         </select>
+                    </div>
+                    <div id="poll-settings" class="hidden bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 space-y-3">
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <div class="relative">
+                                <input type="checkbox" name="poll_allow_multiple" value="1" class="sr-only peer">
+                                <div class="w-10 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                            </div>
+                            <span class="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Mehrfachauswahl erlauben</span>
+                        </label>
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 ml-1">Passwort (optional)</label>
@@ -227,8 +297,13 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                     </button>
                 </form>
             </section>
+            <script>
+                function togglePollSettings(val) {
+                    document.getElementById('poll-settings').classList.toggle('hidden', val !== 'poll');
+                }
+            </script>
 
-        <?php elseif ($sessionId && !$isAuthenticated): ?>
+        <?php elseif ($viewMode === 'login'): ?>
             <!-- Login -->
             <section class="bg-slate-800/50 backdrop-blur-md p-6 rounded-2xl border border-slate-700 shadow-xl">
                 <div class="text-center mb-6">
@@ -250,7 +325,68 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                 </form>
             </section>
 
-        <?php elseif ($isAuthenticated): ?>
+        <?php elseif ($viewMode === 'poll_vote'): ?>
+            <!-- Public Poll Voting -->
+            <section class="bg-slate-800/50 backdrop-blur-md p-6 rounded-2xl border border-slate-700 shadow-xl">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-white"><?= htmlspecialchars($currentSession['title']) ?></h2>
+                    <p class="text-slate-400 text-sm mt-1">Nimm an der Umfrage teil.</p>
+                </div>
+
+                <?php if (isset($_GET['voted']) || isset($_SESSION['voted_' . $sessionId])): ?>
+                    <div class="bg-cyan-500/20 border border-cyan-500/50 text-cyan-200 p-4 rounded-xl mb-6 text-center">
+                        <p class="font-bold">Vielen Dank!</p>
+                        <p class="text-xs">Deine Stimme wurde gezählt.</p>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Aktuelles Ergebnis</h3>
+                        <?php 
+                        $maxVotes = count($currentSession['votes']) > 0 ? max(array_column($currentSession['options'], 'votes')) : 1;
+                        if ($maxVotes == 0) $maxVotes = 1;
+                        foreach ($currentSession['options'] as $opt): 
+                            $percent = round(($opt['votes'] ?? 0) / $maxVotes * 100);
+                        ?>
+                            <div class="space-y-1">
+                                <div class="flex justify-between text-sm">
+                                    <span class="font-bold"><?= htmlspecialchars($opt['text']) ?></span>
+                                    <span class="text-cyan-400 font-bold"><?= $opt['votes'] ?? 0 ?></span>
+                                </div>
+                                <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700">
+                                    <div class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all duration-1000" style="width: <?= $percent ?>%"></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <form method="POST" class="space-y-6">
+                        <input type="hidden" name="action" value="vote">
+                        
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 ml-1">Dein Name</label>
+                            <input type="text" name="voter_name" required placeholder="Vorname Nachname" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all">
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 ml-1">
+                                Deine Wahl (<?= $currentSession['settings']['poll_allow_multiple'] ? 'Mehrfachauswahl' : 'Einfachauswahl' ?>)
+                            </label>
+                            <?php foreach ($currentSession['options'] as $idx => $opt): ?>
+                                <label class="flex items-center p-4 bg-slate-900/50 border border-slate-700 rounded-xl cursor-pointer hover:border-cyan-500/50 transition-all group">
+                                    <input type="<?= $currentSession['settings']['poll_allow_multiple'] ? 'checkbox' : 'radio' ?>" name="vote_options[]" value="<?= $idx ?>" class="w-5 h-5 text-cyan-600 bg-slate-900 border-slate-700 rounded focus:ring-cyan-500 focus:ring-2">
+                                    <span class="ml-3 font-medium text-slate-200 group-hover:text-white"><?= htmlspecialchars($opt['text']) ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <button type="submit" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold py-4 rounded-xl transition-all transform active:scale-[0.98]">
+                            Abstimmen
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </section>
+
+        <?php elseif ($viewMode === 'dashboard'): ?>
             <!-- Dashboard -->
             <main class="space-y-6">
                 <div class="flex items-center gap-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
@@ -267,8 +403,8 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                     </button>
                 </div>
 
-                <!-- Result Display -->
-                <?php if ($selectionResult): ?>
+                <!-- Result Display (Non-Poll) -->
+                <?php if ($selectionResult && $currentSession['method'] !== 'poll'): ?>
                     <div id="result-box" class="bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border-2 border-cyan-500 p-8 rounded-[2rem] text-center animate-bounce shadow-2xl shadow-cyan-500/20 relative overflow-hidden">
                         <div class="absolute inset-0 bg-white/5 opacity-20 pointer-events-none"></div>
                         <p class="text-[10px] uppercase font-black tracking-[0.2em] text-cyan-400 mb-2">Die Wahl ist gefallen</p>
@@ -276,8 +412,38 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                     </div>
                 <?php endif; ?>
 
+                <!-- Poll Results Dashboard -->
+                <?php if ($currentSession['method'] === 'poll'): ?>
+                    <section class="bg-slate-800/30 p-6 rounded-2xl border border-slate-700/50 space-y-4">
+                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Aktuelle Auswertung</h3>
+                        <div class="space-y-4">
+                            <?php 
+                            $totalVoters = count($currentSession['votes']);
+                            $maxVotes = $totalVoters > 0 ? max(array_column($currentSession['options'], 'votes')) : 0;
+                            if ($maxVotes == 0) $maxVotes = 1;
+
+                            foreach ($currentSession['options'] as $opt): 
+                                $percent = round(($opt['votes'] ?? 0) / $maxVotes * 100);
+                            ?>
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="font-bold"><?= htmlspecialchars($opt['text']) ?></span>
+                                        <span class="text-cyan-400 font-bold"><?= $opt['votes'] ?? 0 ?> (<?= $totalVoters > 0 ? round(($opt['votes'] ?? 0) / $totalVoters * 100) : 0 ?>%)</span>
+                                    </div>
+                                    <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700">
+                                        <div class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all" style="width: <?= $percent ?>%"></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="pt-4 border-t border-slate-700/50 mt-4">
+                            <p class="text-xs text-slate-500 italic">Gesamtteilnehmer: <?= $totalVoters ?></p>
+                        </div>
+                    </section>
+                <?php endif; ?>
+
                 <!-- Selection Button -->
-                <?php if (!empty($currentSession['options'])): ?>
+                <?php if (!empty($currentSession['options']) && $currentSession['method'] !== 'poll'): ?>
                     <form method="POST">
                         <input type="hidden" name="action" value="select">
                         <button type="submit" class="w-full bg-white text-slate-900 font-black py-5 rounded-2xl text-xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
@@ -291,7 +457,7 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                     <div class="flex items-center justify-between px-1">
                         <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">Optionen (<?= count($currentSession['options']) ?>)</h3>
                         <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full border border-slate-700">
-                            Methode: <?= $currentSession['method'] === 'random' ? 'Zufall' : ($currentSession['method'] === 'even' ? 'Verteilung' : 'Gewichtet') ?>
+                            Methode: <?= $currentSession['method'] === 'random' ? 'Zufall' : ($currentSession['method'] === 'even' ? 'Verteilung' : ($currentSession['method'] === 'weighted' ? 'Gewichtet' : 'Umfrage')) ?>
                         </span>
                     </div>
 
@@ -303,9 +469,15 @@ if ($isAuthenticated && isset($_POST['action']) && $_POST['action'] === 'select'
                                     <div class="flex-1 min-w-0">
                                         <span class="block font-bold text-slate-100 truncate"><?= htmlspecialchars($opt['text']) ?></span>
                                         <div class="flex items-center gap-2 mt-1">
-                                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded border border-slate-700/50">
-                                                <?= $opt['hits'] ?>x gewählt
-                                            </span>
+                                            <?php if ($currentSession['method'] === 'poll'): ?>
+                                                <span class="text-[10px] font-bold text-cyan-500 uppercase tracking-tighter bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                                                    <?= $opt['votes'] ?? 0 ?> Stimmen
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-900/50 px-2 py-0.5 rounded border border-slate-700/50">
+                                                    <?= $opt['hits'] ?>x gewählt
+                                                </span>
+                                            <?php endif; ?>
                                             <?php if ($currentSession['method'] === 'weighted'): ?>
                                                 <span class="text-[10px] font-bold text-cyan-500 uppercase tracking-tighter bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
                                                     Gewicht: <?= $opt['weight'] ?? 1 ?>
