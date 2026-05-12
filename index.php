@@ -258,7 +258,6 @@ if ($sessionId && $currentSession) {
                 <div class="flex items-center justify-center mb-2">
                     <svg class="w-16 h-16 text-cyan-500 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        <circle cx="12" cy="12" r="3" fill="currentColor" />
                     </svg>
                 </div>
                 <h1 class="text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
