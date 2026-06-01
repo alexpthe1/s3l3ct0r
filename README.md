@@ -36,11 +36,37 @@ Da s3l3ct0r ein reines PHP-Projekt ohne Datenbankabhängigkeit ist, ist die Inst
 3. **Link teilen:** Kopiere die URL aus der Adresszeile oder nutze den "Kopieren"-Button, um andere zur Session einzuladen.
 4. **Wählen:** Klicke auf "JETZT WÄHLEN", um das Ergebnis zu generieren.
 
+## ⚙️ Konfiguration
+
+Die globalen Einstellungen werden in der `config.yaml` im Hauptverzeichnis vorgenommen. Diese Datei kann entweder manuell oder über das **Master Dashboard** bearbeitet werden.
+
+| Parameter | Beschreibung | Werte |
+| :--- | :--- | :--- |
+| `app_name` | Name der Applikation. | `string` |
+| `logo_svg` | HTML/SVG Code für das Logo. | `string` |
+| `background_style` | CSS Wert für den Hintergrund. | `CSS string` |
+| `primary_color` | Primärfarbe für UI-Elemente. | `HEX Code` |
+| `secondary_color` | Sekundärfarbe für Farbverläufe. | `HEX Code` |
+| `custom_css` | Beliebiger CSS-Code zur UI-Anpassung. | `string` |
+| `use_x_real_ip` | Nutzt `X-Real-IP` Header. | `true`, `false` |
+| `password_algo` | Speicherart der Session-Passwörter. | `bcrypt`, `plaintext` |
+| `master_password` | Kennwort für das Master Dashboard. | `string` |
+
+## 👑 Master Dashboard
+
+Unter `master.php` findest du eine zentrale Verwaltungsoberfläche:
+- **Session-Übersicht**: Alle aktiven Sessions sortiert nach Datum.
+- **Admin-Login**: Direktes Einloggen in jede Session ohne Einzelpasswort.
+- **Bereinigung**: Löschen einzelner Sessions oder Batch-Löschung (z.B. alle älter als 30 Tage).
+- **Live-Config**: Bearbeiten der `config.yaml` direkt im Browser.
+
+*Hinweis: Beim ersten Aufruf der `master.php` wirst du aufgefordert, ein Master-Kennwort festzulegen, falls noch keines in der `config.yaml` existiert.*
+
 ## 🔒 Sicherheit
 
-- Sessions werden im Ordner `data/` gespeichert.
-- Die mitgelieferte `.htaccess` im `data/`-Ordner verhindert den direkten Zugriff auf die JSON-Dateien über den Browser.
-- Passwörter werden sicher mit `password_hash()` verschlüsselt.
+- **Config-Schutz**: Die `config.yaml` ist über eine `.htaccess` vor direktem Browser-Zugriff geschützt.
+- **Daten-Schutz**: Der Ordner `data/` ist ebenfalls geschützt.
+- **Verschlüsselung**: Session-Passwörter werden standardmäßig mit `bcrypt` gehasht.
 
 ## 📄 Lizenz
 

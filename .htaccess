@@ -1,0 +1,19 @@
+# Protect configuration and sensitive data
+<Files "config.yaml">
+    Require all denied
+</Files>
+
+<Files "security.log">
+    Require all denied
+</Files>
+
+<Files ".failed_master_login">
+    Require all denied
+</Files>
+
+<Files ".rate_limits.json">
+    Require all denied
+</Files>
+
+# Ensure directory listing is disabled
+Options -Indexes

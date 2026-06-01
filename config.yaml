@@ -1,0 +1,36 @@
+# s3l3ct0r Configuration
+app_name: "s3l3ct0r"
+logo_svg: "<svg class=\"w-16 h-16 text-cyan-500 transition-transform\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\"/></svg>"
+background_style: "radial-gradient(circle at top right, #1a1a2e, #16213e, #0f3460)"
+primary_color: "#06b6d4"
+secondary_color: "#3b82f6"
+font_family: "'Space Grotesk', sans-serif"
+footer_links: "GitHub:https://github.com/alexpthe1/s3l3ct0r,Imprint:#,Privacy:#"
+use_x_real_ip: true
+enable_geoip: true
+password_algo: "bcrypt"
+master_password: ""
+master_allowed_ips: ""
+session_creation_rate_limit: 10
+auto_cleanup_days: 30
+max_ideas_per_session: 100
+honeypot_field: "website_url"
+default_method: "random"
+custom_css: |
+  .bg-gradient::before {
+      content: "";
+      position: fixed;
+      width: 200vmax;
+      height: 200vmax;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(120deg);
+      background-image: radial-gradient(var(--secondary) 1.5px, transparent 0);
+      background-size: 40px 40px;
+      opacity: 0.6;
+      mask-image: radial-gradient(circle at center, transparent 10vmax, black 60vmax);
+      -webkit-mask-image: radial-gradient(circle at center, transparent 10vmax, black 60vmax);
+      pointer-events: none;
+      z-index: -1;
+  }
+debug_mode: true
