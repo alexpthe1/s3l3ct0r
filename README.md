@@ -9,64 +9,71 @@
 
 - **Verschiedene Auswahlmodi:**
   - **Zufall:** Jede Option hat die gleiche Chance.
-  - **Gleichmäßige Verteilung:** Berücksichtigt die bisherige Historie (Optionen, die seltener gewählt wurden, kommen eher dran).
-  - **Gewichtung:** Du kannst bestimmen, wie wahrscheinlich eine Option gewählt wird (z.B. Option A doppelt so oft wie Option B).
-  - **Umfrage:** Erstelle ein Voting, bei dem Nutzer ihren Namen angeben und für Optionen abstimmen können. Inklusive Live-Ergebnissen und einstellbarer Mehrfachauswahl.
-- **Session-basiert:** Jede Auswahlrunde hat eine eigene URL, die geteilt werden kann.
-- **Passwortschutz:** Schütze den Admin-Bereich deiner Sessions vor unbefugtem Zugriff.
-- **Modernes Design:** Responsive UI mit Tailwind CSS und Space Grotesk Typografie.
-- **Dateibasiert:** Keine Datenbank erforderlich (speichert Daten als JSON).
+  - **Gleichmäßige Verteilung:** Berücksichtigt die Historie der Session.
+  - **Gewichtung:** Bestimme Wahrscheinlichkeiten (z.B. 80% vs 20%).
+  - **Umfrage:** Votings mit Namen und Live-Ergebnissen.
+  - **Brainstorm:** Offene Ideensammlung für Teams.
+- **Master Dashboard:** Zentrale Verwaltung aller Sessions und globale Konfiguration.
+- **Modernes Design:** Volle Kontrolle über Farben, Fonts und Hintergründe.
+- **Dateibasiert:** Keine Datenbank erforderlich (JSON/YAML).
 
 ## 🚀 Installation
 
-Da s3l3ct0r ein reines PHP-Projekt ohne Datenbankabhängigkeit ist, ist die Installation extrem einfach:
-
-1. **Repository klonen oder herunterladen:**
-   ```bash
-   git clone https://github.com/alexpthe1/s3l3ct0r.git
-   ```
-2. **Auf Webserver verschieben:** Kopiere alle Dateien in das Web-Verzeichnis deines Servers (z.B. `htdocs` bei XAMPP oder `/var/www/html`).
-3. **Schreibrechte prüfen:** Der Ordner `data/` muss für den Webserver beschreibbar sein, da dort die Sessions als JSON-Dateien gespeichert werden.
-4. **Aufrufen:** Öffne die `index.php` in deinem Browser (z.B. `http://localhost/s3l3ct0r`).
-
-## 🛠 Verwendung
-
-1. **Session erstellen:** Gib einen Titel ein und wähle die gewünschte Auswahlmethode. Optional kannst du ein Passwort festlegen.
-2. **Optionen hinzufügen:** Füge die Begriffe hinzu, zwischen denen gewählt werden soll. Bei der Methode "Gewichtung" kannst du zusätzlich einen Wert (z.B. 1-100) angeben.
-3. **Link teilen:** Kopiere die URL aus der Adresszeile oder nutze den "Kopieren"-Button, um andere zur Session einzuladen.
-4. **Wählen:** Klicke auf "JETZT WÄHLEN", um das Ergebnis zu generieren.
+1. **Repository klonen:** `git clone https://github.com/alexpthe1/s3l3ct0r.git`
+2. **Auf Webserver verschieben:** Kopiere alle Dateien in dein Web-Verzeichnis.
+3. **Schreibrechte:** Der Ordner `data/` muss für den Webserver beschreibbar sein.
+4. **Aufrufen:** Öffne `index.php` (Nutzer-Seite) oder `master.php` (Verwaltung).
 
 ## ⚙️ Konfiguration
 
-Die globalen Einstellungen werden in der `config.yaml` im Hauptverzeichnis vorgenommen. Diese Datei kann entweder manuell oder über das **Master Dashboard** bearbeitet werden.
+Die globalen Einstellungen werden in der `config.yaml` vorgenommen (manuell oder via Master Dashboard).
 
-| Parameter | Beschreibung | Werte |
+| Parameter | Beschreibung | Beispiel |
 | :--- | :--- | :--- |
-| `app_name` | Name der Applikation. | `string` |
-| `logo_svg` | HTML/SVG Code für das Logo. | `string` |
-| `background_style` | CSS Wert für den Hintergrund. | `CSS string` |
-| `primary_color` | Primärfarbe für UI-Elemente. | `HEX Code` |
-| `secondary_color` | Sekundärfarbe für Farbverläufe. | `HEX Code` |
-| `custom_css` | Beliebiger CSS-Code zur UI-Anpassung. | `string` |
-| `use_x_real_ip` | Nutzt `X-Real-IP` Header. | `true`, `false` |
-| `password_algo` | Speicherart der Session-Passwörter. | `bcrypt`, `plaintext` |
-| `master_password` | Kennwort für das Master Dashboard. | `string` |
+| `app_name` | Name der Instanz | `"Mein Team-Tool"` |
+| `primary_color` | Hauptfarbe (HEX) | `"#06b6d4"` |
+| `secondary_color` | Akzentfarbe (HEX) | `"#3b82f6"` |
+| `font_family` | Google Font Name | `"Bungee Spice"` |
+| `background_style` | CSS Hintergrund | `radial-gradient(...)` |
+| `custom_css` | Eigener CSS Code | siehe unten |
+| `use_x_real_ip` | Proxy Support | `true` / `false` |
+| `auto_cleanup_days` | Auto-Löschung | `30` (Tage) |
+
+## 🎨 Design & Customization
+
+Hier sind einige Beispiele, wie du s3l3ct0r optisch anpassen kannst:
+
+### 1. Farben & Gradients
+Setze `primary_color` auf `#ff4e50` und `secondary_color` auf `#f9d423` für einen warmen Sonnenuntergangs-Look. Die Buttons und Header-Verläufe passen sich automatisch an.
+
+### 2. Hintergrund-Styles (`background_style`)
+- **Deep Space (Standard):** `radial-gradient(circle at top right, #1a1a2e, #16213e, #0f3460)`
+- **Clean Slate:** `#0f172a`
+- **Image:** `url('https://source.unsplash.com/random/1920x1080?dark') center/cover no-repeat`
+
+### 3. Custom CSS: Die "Punkte-Matrix"
+Kopiere diesen Code in das `custom_css` Feld für einen modernen Tech-Look:
+```css
+.bg-gradient::before {
+    content: ""; position: fixed; width: 200vmax; height: 200vmax;
+    top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(120deg);
+    background-image: radial-gradient(var(--secondary) 1.5px, transparent 0);
+    background-size: 40px 40px; opacity: 0.6;
+    mask-image: radial-gradient(circle at center, transparent 10vmax, black 60vmax);
+    -webkit-mask-image: radial-gradient(circle at center, transparent 10vmax, black 60vmax);
+    pointer-events: none; z-index: -1;
+}
+```
 
 ## 👑 Master Dashboard
 
-Unter `master.php` findest du eine zentrale Verwaltungsoberfläche:
-- **Session-Übersicht**: Alle aktiven Sessions sortiert nach Datum.
-- **Admin-Login**: Direktes Einloggen in jede Session ohne Einzelpasswort.
-- **Bereinigung**: Löschen einzelner Sessions oder Batch-Löschung (z.B. alle älter als 30 Tage).
-- **Live-Config**: Bearbeiten der `config.yaml` direkt im Browser.
+Unter `master.php` kannst du:
+- Alle Sessions sehen und nach letzter Aktivität sortieren.
+- Sessions **duplizieren (Kopie)** oder im **Roh-Format (JSON)** bearbeiten.
+- Alte Sessions automatisch bereinigen lassen.
+- Das Design und Sicherheits-Parameter live anpassen.
 
-*Hinweis: Beim ersten Aufruf der `master.php` wirst du aufgefordert, ein Master-Kennwort festzulegen, falls noch keines in der `config.yaml` existiert.*
-
-## 🔒 Sicherheit
-
-- **Config-Schutz**: Die `config.yaml` ist über eine `.htaccess` vor direktem Browser-Zugriff geschützt.
-- **Daten-Schutz**: Der Ordner `data/` ist ebenfalls geschützt.
-- **Verschlüsselung**: Session-Passwörter werden standardmäßig mit `bcrypt` gehasht.
+*Sicherheit: Schütze den Zugang mit einem starken `master_password`. Fehlversuche werden in `data/security.log` protokolliert.*
 
 ## 📄 Lizenz
 
