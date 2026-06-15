@@ -278,6 +278,42 @@ if (isset($_POST['action'])) {
         }
     }
     if ($isAuthenticated && $_POST['action'] === 'select') { $selectionResult = performSelection($currentSession); }
+
+    if ($isAuthenticated && $_POST['action'] === 'update_option' && isset($_POST['option_idx'])) {
+        $idx = (int)$_POST['option_idx'];
+        if (isset($currentSession['options'][$idx])) {
+            $currentSession['options'][$idx]['text'] = htmlspecialchars($_POST['option_text']);
+            if (isset($_POST['weight'])) $currentSession['options'][$idx]['weight'] = (int)$_POST['weight'];
+            saveSession($currentSession);
+            header("Location: ?id=" . $sessionId . "&admin=1");
+            exit;
+        }
+    }
+}
+
+// Handle GET-based actions (Remove Option)
+if ($isAuthenticated && isset($_GET['remove']) && $sessionId) {
+    $idx = (int)$_GET['remove'];
+    if (isset($currentSession['options'][$idx])) {
+        unset($currentSession['options'][$idx]);
+        $currentSession['options'] = array_values($currentSession['options']);
+        
+        // Update existing votes to match new indices
+        if (!empty($currentSession['votes'])) {
+            foreach ($currentSession['votes'] as &$vote) {
+                $newSelected = [];
+                foreach ($vote['options'] as $oldIdx) {
+                    if ($oldIdx < $idx) $newSelected[] = $oldIdx;
+                    elseif ($oldIdx > $idx) $newSelected[] = $oldIdx - 1;
+                }
+                $vote['options'] = $newSelected;
+            }
+        }
+        
+        saveSession($currentSession);
+        header("Location: ?id=" . $sessionId . "&admin=1");
+        exit;
+    }
 }
 
 $viewMode = 'dashboard';
